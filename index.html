@@ -51,7 +51,7 @@
             width: 100%; height: 100%;
             z-index: 1;
             /* Mood backdrop: Dark Kathmandu bhatti/bar atmosphere */
-            background-image: url('background-new.png');
+            background-image: url('background-newvercel --prod.png');
             background-size: cover;
             background-position: center;
             /* filter: brightness(0.55) contrast(1.1); */
@@ -688,7 +688,7 @@
                 </button>
             </div>
 
-            <div class="drawer-hint">Built-in ambience uses <code>/music/ambience/</code>. Tap the folder icon to temporarily preview a local loop.</div>
+            <div class="drawer-hint">Built-in ambience uses <code>/ambient/</code>. Tap the folder icon to temporarily preview a local loop. Street dogs bark randomly on their own — no slider needed.</div>
 
             <div class="channel-row">
                 <div class="channel-labels">
@@ -845,23 +845,42 @@
             }
             loadTrack(0);
         }
-        // Add these optional ambience files later if you want the mixer to make sound.
-        const ambiencePaths = { sukuti: 'Musics/ambience/sukuti.mp3', crowd: 'Musics/ambience/crowd.mp3', rain: 'Musics/ambience/rain.mp3', street: 'Musics/ambience/street.mp3' };
+        // Mixer-controlled ambience loops (each has its own slider in the drawer).
+        const ambiencePaths = { sukuti: 'ambient/sukuti sizzling.mp3', crowd: 'ambient/bhatti_crowd.mp3', rain: 'ambient/rain_thunder.mp3', street: 'ambient/street noise.mp3' };
+        // Dog bark: no slider, no loop — fires at random moments on its own while the site is playing.
+        const dogBarkPath = 'ambient/dog_bark.mp3';
+        const dogBarkVolumeRange = [0.18, 0.35]; // random volume each bark, kept subtle
+        const dogBarkIntervalRange = [12000, 45000]; // ms between barks
         let currentIdx = 0, localUrls = [];
         const mainAudio = new Audio(); mainAudio.preload = 'metadata';
         const ambientKeys = Object.keys(ambiencePaths);
         const ambients = Object.fromEntries(ambientKeys.map(key => { const audio = new Audio(ambiencePaths[key]); audio.loop = true; audio.preload = 'none'; return [key, audio]; }));
+        const dogBark = new Audio(dogBarkPath); dogBark.preload = 'none';
+        let dogBarkTimer = null;
+        function randBetween([min, max]) { return min + Math.random() * (max - min); }
+        function scheduleDogBark() {
+            clearTimeout(dogBarkTimer);
+            dogBarkTimer = setTimeout(() => {
+                if (isPlaying()) {
+                    dogBark.currentTime = 0;
+                    dogBark.volume = randBetween(dogBarkVolumeRange);
+                    dogBark.play().catch(() => {});
+                }
+                scheduleDogBark();
+            }, randBetween(dogBarkIntervalRange));
+        }
+        function stopDogBark() { clearTimeout(dogBarkTimer); dogBarkTimer = null; dogBark.pause(); }
         const playBtn = document.getElementById('play-btn'), playIcon = document.getElementById('play-icon'), prevBtn = document.getElementById('prev-btn'), nextBtn = document.getElementById('next-btn'), addTracksBtn = document.getElementById('add-tracks-btn'), trackFileInput = document.getElementById('track-file-input'), trackTitle = document.getElementById('track-title'), trackArtist = document.getElementById('track-artist'), vinylArt = document.getElementById('vinyl-art'), albumCover = document.getElementById('album-cover'), progressFill = document.getElementById('progress-fill'), progressRail = document.getElementById('progress-rail'), timeCurr = document.getElementById('time-curr'), timeDur = document.getElementById('time-dur'), ambientBtn = document.getElementById('toggle-ambient-btn'), ambientDrawer = document.getElementById('ambient-drawer'), closeDrawer = document.getElementById('close-drawer');
         const isPlaying = () => !mainAudio.paused && !mainAudio.ended;
         const fmtTime = s => Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00';
         function updatePlayUI() { const playing = isPlaying(); playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play'); playIcon.innerHTML = playing ? '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>' : '<path d="M8 5v14l11-7z"/>'; vinylArt.classList.toggle('playing', playing); }
         const toAudioUrl = path => path.split('/').map(encodeURIComponent).join('/');
         function loadTrack(index, autoplay = false) { if (playlist.length === 0) return; currentIdx = (index + playlist.length) % playlist.length; const item = playlist[currentIdx]; mainAudio.src = item.src.startsWith('blob:') ? item.src : toAudioUrl(item.src); mainAudio.load(); trackTitle.textContent = item.title; trackArtist.textContent = item.artist; albumCover.src = item.cover; albumCover.alt = `${item.title} album cover`; timeCurr.textContent = timeDur.textContent = '0:00'; progressFill.style.width = '0%'; if (autoplay) playCurrent(); }
-        async function playCurrent() { try { await mainAudio.play(); ambientKeys.forEach(key => { const a = ambients[key]; a.volume = Number(document.getElementById(`vol-${key}`).value); if (a.volume > 0) a.play().catch(() => {}); }); } catch { trackArtist.textContent = 'Audio unavailable — add the licensed file at ' + playlist[currentIdx].src; } finally { updatePlayUI(); } }
+        async function playCurrent() { try { await mainAudio.play(); ambientKeys.forEach(key => { const a = ambients[key]; a.volume = Number(document.getElementById(`vol-${key}`).value); if (a.volume > 0) a.play().catch(() => {}); }); scheduleDogBark(); } catch { trackArtist.textContent = 'Audio unavailable — add the licensed file at ' + playlist[currentIdx].src; } finally { updatePlayUI(); } }
         function togglePlay() { if (isPlaying()) mainAudio.pause(); else playCurrent(); }
         playBtn.addEventListener('click', togglePlay); addTracksBtn.addEventListener('click', () => trackFileInput.click());
         prevBtn.addEventListener('click', () => loadTrack(currentIdx - 1, isPlaying())); nextBtn.addEventListener('click', () => loadTrack(currentIdx + 1, isPlaying()));
-        mainAudio.addEventListener('play', updatePlayUI); mainAudio.addEventListener('pause', () => { ambientKeys.forEach(key => ambients[key].pause()); updatePlayUI(); }); mainAudio.addEventListener('ended', () => loadTrack(currentIdx + 1, true)); mainAudio.addEventListener('loadedmetadata', () => timeDur.textContent = fmtTime(mainAudio.duration)); mainAudio.addEventListener('timeupdate', () => { if (Number.isFinite(mainAudio.duration) && mainAudio.duration > 0) { progressFill.style.width = `${(mainAudio.currentTime / mainAudio.duration) * 100}%`; timeCurr.textContent = fmtTime(mainAudio.currentTime); } }); mainAudio.addEventListener('error', updatePlayUI);
+        mainAudio.addEventListener('play', updatePlayUI); mainAudio.addEventListener('pause', () => { ambientKeys.forEach(key => ambients[key].pause()); stopDogBark(); updatePlayUI(); }); mainAudio.addEventListener('ended', () => loadTrack(currentIdx + 1, true)); mainAudio.addEventListener('loadedmetadata', () => timeDur.textContent = fmtTime(mainAudio.duration)); mainAudio.addEventListener('timeupdate', () => { if (Number.isFinite(mainAudio.duration) && mainAudio.duration > 0) { progressFill.style.width = `${(mainAudio.currentTime / mainAudio.duration) * 100}%`; timeCurr.textContent = fmtTime(mainAudio.currentTime); } }); mainAudio.addEventListener('error', updatePlayUI);
         progressRail.addEventListener('click', e => { if (!Number.isFinite(mainAudio.duration)) return; const rect = progressRail.getBoundingClientRect(), pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)); mainAudio.currentTime = pos * mainAudio.duration; });
         const parseFileName = name => { const base = name.replace(/\.[^/.]+$/, ''), parts = base.split(' - '); return parts.length > 1 ? { artist: parts.shift().trim(), title: parts.join(' - ').trim() } : { artist: 'Local preview', title: base.trim() }; };
         trackFileInput.addEventListener('change', e => { const added = [...e.target.files].filter(file => file.type.startsWith('audio/')).map(file => { const info = parseFileName(file.name), src = URL.createObjectURL(file); localUrls.push(src); return { ...info, src, cover: albumCover.src }; }); if (added.length) { const first = playlist.length; playlist.push(...added); loadTrack(first); } e.target.value = ''; });
